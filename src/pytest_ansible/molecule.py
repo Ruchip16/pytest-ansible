@@ -2,6 +2,7 @@
 # pylint: disable=protected-access
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 import shlex
@@ -13,34 +14,10 @@ from shlex import quote
 import pkg_resources
 import pytest
 import yaml
-
-try:
-    from molecule.api import drivers
-except ImportError:
-    drivers = None
-
-
-try:
-    molecule_config = importlib.import_module("molecule.config")
-    ansible_version = molecule_config.ansible_version
-except ImportError:
-    ansible_version = None
-
-    :param start_path: The path to the root of the collection
-    :returns: A tuple of the namespace and name
-    """
-    info_file = start_path / "galaxy.yml"
-    logger.info("Looking for collection info in %s", info_file)
+from molecule.api import drivers
+from molecule.config import ansible_version
 
 logger = logging.getLogger(__name__)
-
-
-def pytest_collection_modifyitems(config, items):
-    if not config.getoption("--molecule"):
-        skip_molecule = pytest.mark.skip(reason="Molecule tests are disabled")
-        for item in items:
-            if "molecule" in item.keywords:
-                item.add_marker(skip_molecule)
 
 
 def molecule_pytest_configure(config):
