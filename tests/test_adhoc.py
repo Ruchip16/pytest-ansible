@@ -1,16 +1,23 @@
+"""Ad-hoc tests for pytest-ansible."""
+
+from __future__ import annotations
+
 import pytest
+
+from .conftest import skip_ansible_219
+
 
 # pylint: disable=unused-import
 try:
-    from _pytest.main import (
-        EXIT_INTERRUPTED,  # type: ignore[attr-defined]
-        EXIT_NOTESTSCOLLECTED,  # type: ignore[attr-defined]
-        EXIT_OK,  # type: ignore[attr-defined]
-        EXIT_TESTSFAILED,  # type: ignore[attr-defined]
-        EXIT_USAGEERROR,  # type: ignore[attr-defined]
+    from _pytest.main import (  # type: ignore[attr-defined]
+        EXIT_INTERRUPTED,
+        EXIT_NOTESTSCOLLECTED,
+        EXIT_OK,
+        EXIT_TESTSFAILED,
+        EXIT_USAGEERROR,
     )
 except ImportError:
-    from _pytest.main import ExitCode
+    from _pytest.main import ExitCode  # type: ignore[attr-defined]
 
     EXIT_OK = ExitCode.OK
     EXIT_TESTSFAILED = ExitCode.TESTS_FAILED
@@ -19,8 +26,8 @@ except ImportError:
     EXIT_NOTESTSCOLLECTED = ExitCode.NO_TESTS_COLLECTED
 
 
-@pytest.mark.old()
-def test_contacted_with_params(testdir, option):
+@skip_ansible_219
+def test_contacted_with_params(pytester, option):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
     """FIXME."""
     src = """
         import pytest
@@ -35,8 +42,8 @@ def test_contacted_with_params(testdir, option):
                 assert result['ping'] == 'pong'
 
     """
-    testdir.makepyfile(src)
-    result = testdir.runpytest_subprocess(
+    pytester.makepyfile(src)
+    result = pytester.runpytest_subprocess(
         *[
             *option.args,
             "--ansible-inventory",
@@ -49,8 +56,8 @@ def test_contacted_with_params(testdir, option):
     assert result.parseoutcomes()["passed"] == 1
 
 
-@pytest.mark.old()
-def test_contacted_with_params_and_inventory_marker(testdir, option):
+@skip_ansible_219
+def test_contacted_with_params_and_inventory_marker(pytester, option):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
     """FIXME."""
     src = f"""
         import pytest
@@ -67,16 +74,16 @@ def test_contacted_with_params_and_inventory_marker(testdir, option):
 
         """
 
-    testdir.makepyfile(src)
-    result = testdir.runpytest_subprocess(
+    pytester.makepyfile(src)
+    result = pytester.runpytest_subprocess(
         *[*option.args, "--ansible-host-pattern", "local"],
     )
     assert result.ret == EXIT_OK
     assert result.parseoutcomes()["passed"] == 1
 
 
-@pytest.mark.old()
-def test_contacted_with_params_and_host_pattern_marker(testdir, option):
+@skip_ansible_219
+def test_contacted_with_params_and_host_pattern_marker(pytester, option):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
     """FIXME."""
     src = """
         import pytest
@@ -92,8 +99,8 @@ def test_contacted_with_params_and_host_pattern_marker(testdir, option):
                 assert result['ping'] == 'pong'
 
     """
-    testdir.makepyfile(src)
-    result = testdir.runpytest_subprocess(
+    pytester.makepyfile(src)
+    result = pytester.runpytest_subprocess(
         *[
             *option.args,
             "--ansible-inventory",
@@ -106,8 +113,8 @@ def test_contacted_with_params_and_host_pattern_marker(testdir, option):
     assert result.parseoutcomes()["passed"] == 1
 
 
-@pytest.mark.old()
-def test_contacted_with_params_and_inventory_host_pattern_marker(testdir, option):
+@skip_ansible_219
+def test_contacted_with_params_and_inventory_host_pattern_marker(pytester, option):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
     """FIXME."""
     src = f"""
         import pytest
@@ -123,12 +130,12 @@ def test_contacted_with_params_and_inventory_host_pattern_marker(testdir, option
                 assert result['ping'] == 'pong'
         """
 
-    testdir.makepyfile(src)
-    result = testdir.runpytest_subprocess(
+    pytester.makepyfile(src)
+    result = pytester.runpytest_subprocess(
         *[
             *option.args,
             "--ansible-inventory",
-            "/dev/null",
+            str(option.inventory),
             "--ansible-host-pattern",
             "unreachable",
         ],
@@ -137,18 +144,18 @@ def test_contacted_with_params_and_inventory_host_pattern_marker(testdir, option
     assert result.parseoutcomes()["passed"] == 1
 
 
-@pytest.mark.old()
-def test_become(testdir, option):
+@skip_ansible_219
+def test_become(pytester, option):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
     """Test --ansible-become* parameters.  This test doesn't actually 'sudo',
     but verifies that 'sudo' was attempted by asserting
     '--ansible-become-user' fails as expected.
-    """
+    """  # noqa: D205
     src = f"""
         import pytest
         import ansible
         import re
         import os
-        from pkg_resources import parse_version
+        from packaging.version import parse as parse_version
 
         @pytest.mark.ansible(inventory='{option.inventory}', host_pattern='localhost')
         def test_func(ansible_module):
@@ -158,23 +165,29 @@ def test_become(testdir, option):
             assert len(contacted) == len(ansible_module)
             for result in contacted.values():
                 # Assert test failed as expected
-                if parse_version(ansible.__version__) < parse_version('2.4.0'):
+                if parse_version(ansible.__version__) >= parse_version('2.19.0.dev0'):
+                    assert result["failed"], "Test did not fail as expected"
+                    assert (
+                        "Failed to set permissions on the temporary files Ansible needs to create when becoming an unprivileged user"
+                        in result["msg"]
+                    )
+                elif parse_version(ansible.__version__) < parse_version('2.4.0'):
                     assert 'failed' in result, "Missing expected field in JSON response: failed"
                     assert result['failed'], "Test did not fail as expected"
 
                 # Assert expected failure message
-                if parse_version(ansible.__version__) >= parse_version('2.0.0'):
+                elif parse_version(ansible.__version__) >= parse_version('2.0.0'):
                     assert 'msg' in result, "Missing expected field in JSON response: msg"
                     assert result['msg'].startswith('Failed to set permissions on the temporary files Ansible needs ' \
                         'to create when becoming an unprivileged user')
                 else:
                     assert 'msg' in result, "Missing expected field in JSON response: msg"
-                    assert 'sudo: unknown user: asdfasdf' in result['msg']
-        """
+                    assert 'sudo: unknown user: unknown_user' in result['msg']
+        """  # noqa: E501
 
-    testdir.makepyfile(src)
-    result = testdir.runpytest_subprocess(
-        *option.args
+    pytester.makepyfile(src)
+    result = pytester.runpytest_subprocess(
+        *option.args  # noqa: RUF005
         + [
             "--ansible-inventory",
             str(option.inventory),
@@ -182,15 +195,15 @@ def test_become(testdir, option):
             "localhost",  # run against a single host
             "--ansible-become",  # Enable become support
             "--ansible-become-user",
-            "asdfasdf",  # Connect as asdfasdf
+            "unknown_user",  # Connect as unknown_user
         ],
     )
     assert result.ret == EXIT_OK
     assert result.parseoutcomes()["passed"] == 1
 
 
-@pytest.mark.old()
-def test_dark_with_params(testdir, option):
+@skip_ansible_219
+def test_dark_with_params(pytester, option):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
     """FIXME."""
     src = """
         import pytest
@@ -205,8 +218,8 @@ def test_dark_with_params(testdir, option):
             # assert dark hosts ...
             assert exc_info.value.dark
     """
-    testdir.makepyfile(src)
-    result = testdir.runpytest_subprocess(
+    pytester.makepyfile(src)
+    result = pytester.runpytest_subprocess(
         *[
             *option.args,
             "--ansible-inventory",
@@ -219,8 +232,8 @@ def test_dark_with_params(testdir, option):
     assert result.parseoutcomes()["passed"] == 1
 
 
-@pytest.mark.old()
-def test_dark_with_params_and_inventory_marker(testdir, option):
+@skip_ansible_219
+def test_dark_with_params_and_inventory_marker(pytester, option):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
     """FIXME."""
     src = f"""
         import pytest
@@ -237,16 +250,16 @@ def test_dark_with_params_and_inventory_marker(testdir, option):
             assert exc_info.value.dark
         """
 
-    testdir.makepyfile(src)
-    result = testdir.runpytest_subprocess(
+    pytester.makepyfile(src)
+    result = pytester.runpytest_subprocess(
         *[*option.args, "--ansible-host-pattern", "unreachable"],
     )
     assert result.ret == EXIT_OK
     assert result.parseoutcomes()["passed"] == 1
 
 
-@pytest.mark.old()
-def test_dark_with_params_and_host_pattern_marker(testdir, option):
+@skip_ansible_219
+def test_dark_with_params_and_host_pattern_marker(pytester, option):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
     """FIXME."""
     src = """
         import pytest
@@ -263,8 +276,8 @@ def test_dark_with_params_and_host_pattern_marker(testdir, option):
             # assert dark hosts ...
             assert exc_info.value.dark
     """
-    testdir.makepyfile(src)
-    result = testdir.runpytest_subprocess(
+    pytester.makepyfile(src)
+    result = pytester.runpytest_subprocess(
         *[
             *option.args,
             "--ansible-inventory",
@@ -277,8 +290,8 @@ def test_dark_with_params_and_host_pattern_marker(testdir, option):
     assert result.parseoutcomes()["passed"] == 1
 
 
-@pytest.mark.old()
-def test_dark_with_debug_enabled(testdir, option):
+@pytest.mark.old
+def test_dark_with_debug_enabled(pytester, option):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN201
     """Verify that when verbosity is enabled, additional output is provided upon host failure."""
     src = """
         import pytest
@@ -286,8 +299,8 @@ def test_dark_with_debug_enabled(testdir, option):
         def test_func(ansible_module):
             ansible_module.ping()
     """
-    testdir.makepyfile(src)
-    result = testdir.runpytest_subprocess(
+    pytester.makepyfile(src)
+    result = pytester.runpytest_subprocess(
         *[
             *option.args,
             "--ansible-inventory",

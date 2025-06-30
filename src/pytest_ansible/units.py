@@ -1,10 +1,13 @@
 """Setup the collection for testing."""
+
 from __future__ import annotations
 
 import logging
 import os
 import sys
+
 from pathlib import Path
+
 
 logger = logging.getLogger(__name__)
 
@@ -40,17 +43,17 @@ def get_collection_name(start_path: Path) -> tuple[str | None, str | None]:
     logger.info("Looking for collection info in %s", info_file)
 
     try:
-        with info_file.open(encoding="utf-8") as fhand:
-            galaxy_info = yaml.safe_load(fhand)
+        with info_file.open(encoding="utf-8") as file_handler:
+            galaxy_info = yaml.safe_load(file_handler)
     except FileNotFoundError:
-        logger.error("No galaxy.yml file found, plugin not activated")
+        logger.error("No galaxy.yml file found, plugin not activated")  # noqa: TRY400
         return None, None
 
     try:
         namespace = galaxy_info["namespace"]
         name = galaxy_info["name"]
     except KeyError:
-        logger.error("galaxy.yml file does not contain namespace and name")
+        logger.error("galaxy.yml file does not contain namespace and name")  # noqa: TRY400
         return None, None
 
     logger.debug("galaxy.yml file found, plugin activated")
@@ -101,7 +104,9 @@ def inject(start_path: Path) -> None:
                 os.symlink(entry, name_dir / entry.name)
 
     # Configuration option for additional collection paths
-    additional_collections_paths = [Path("~/.ansible/collections").expanduser()]
+    additional_collections_paths: list[str] = [
+        Path("~/.ansible/collections").expanduser().as_posix()
+    ]
 
     # Check if the environment variable is set for additional paths
     if "COLLECTIONS_PATH" in os.environ and "COLLECTIONS_PATHS" in os.environ:
@@ -111,7 +116,7 @@ def inject(start_path: Path) -> None:
         )
     logger.info("Additional Collections Paths: %s", additional_collections_paths)
 
-    acf_inject(paths=[str(collections_dir)] + additional_collections_paths)
+    acf_inject(paths=[str(collections_dir), *additional_collections_paths])
 
     # Inject the path for the collection into sys.path
     sys.path.insert(0, str(collections_dir))
@@ -121,7 +126,7 @@ def inject(start_path: Path) -> None:
     envvar_name = determine_envvar()
     # Assuming additional_collections_paths is a list of PosixPath objects
     additional_collections_paths = [str(path) for path in additional_collections_paths]
-    env_paths = os.pathsep.join([str(collections_dir)] + additional_collections_paths)
+    env_paths = os.pathsep.join([str(collections_dir), *additional_collections_paths])
     logger.info("Setting %s to %s", envvar_name, env_paths)
     os.environ[envvar_name] = env_paths
 
@@ -143,25 +148,22 @@ def acf_inject(paths: list[str]) -> None:
 
     :param paths: The paths to inject
     """
-    # pylint: disable=protected-access
     if HAS_COLLECTION_FINDER:
         acf = _AnsibleCollectionFinder(paths=paths)
-        acf._install()
+        acf._install()  # noqa: SLF001
         logger.debug("_ACF installed: %s", paths)
-        logger.debug("_ACF configured paths: %s", acf._n_configured_paths)
+        logger.debug("_ACF configured paths: %s", acf._n_configured_paths)  # noqa: SLF001
     else:
         logger.debug("_ACF not available")
 
 
 def determine_envvar() -> str:
-    """Use the existence of the AnsibleCollectionFinder to determine
-    the ansible version.
+    """Use the existence of the AnsibleCollectionFinder to determine the ansible version.
 
-    ansible 2.9 did not have AnsibleCollectionFinder and did not support ANSIBLE_COLLECTIONS_PATH
-    later versions do.
+    Ansible 2.9 did not have AnsibleCollectionFinder and did not support ANSIBLE_COLLECTIONS_PATH later versions do.
 
     :returns: The appropriate environment variable to use
-    """
+    """  # noqa: E501
     if not HAS_COLLECTION_FINDER:
         return "ANSIBLE_COLLECTIONS_PATHS"
     return "ANSIBLE_COLLECTIONS_PATH"

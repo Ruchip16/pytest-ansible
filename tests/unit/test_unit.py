@@ -1,4 +1,4 @@
-"""Tests specific to the unit test functionality."""
+"""Basic unit tests."""
 
 from __future__ import annotations
 
@@ -6,9 +6,11 @@ import logging
 import re
 import subprocess
 import sys
+
 from typing import TYPE_CHECKING
 
 from pytest_ansible.units import inject, inject_only
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,11 +31,14 @@ def test_inject(
     """
     caplog.set_level(logging.DEBUG)
 
-    def mock_get_collection_name(start_path: str) -> tuple[str, str]:
+    def mock_get_collection_name(start_path: Path) -> tuple[str | None, str | None]:  # noqa: ARG001
         """Mock the get_collection_name function.
 
-        :param start_path: The path to the root of the collection
-        :returns: A tuple of the namespace and name
+        Args:
+            start_path: The Path to the root of the collection
+
+        Returns:
+            A tuple of the namespace and name
         """
         return "namespace", "name"
 
@@ -45,14 +50,12 @@ def test_inject(
     (tmp_path / "collections" / "ansible_collections").mkdir(parents=True)
 
     inject(tmp_path)
-    assert (
-        tmp_path / "collections" / "ansible_collections" / "namespace" / "name"
-    ).is_dir()
+    assert (tmp_path / "collections" / "ansible_collections" / "namespace" / "name").is_dir()
     assert (
         str(tmp_path / "collections")
         == sys.path[0]
-        == re.search(r"_ACF installed: \['(.*?)'.*]", caplog.text).groups()[0]
-        == re.search(r"_ACF configured paths: \['(.*?)'.*]", caplog.text).groups()[0]
+        == re.search(r"_ACF installed: \['(.*?)'.*]", caplog.text).groups()[0]  # type: ignore[union-attr]
+        == re.search(r"_ACF configured paths: \['(.*?)'.*]", caplog.text).groups()[0]  # type: ignore[union-attr]
     )
 
 
@@ -76,12 +79,17 @@ def test_inject_only(
     assert (
         str(tmp_path / "collections")
         == sys.path[0]
-        == re.search(r"_ACF installed: \['(.*?)'.*]", caplog.text).groups()[0]
-        == re.search(r"_ACF configured paths: \['(.*?)'.*]", caplog.text).groups()[0]
+        == re.search(r"_ACF installed: \['(.*?)'.*]", caplog.text).groups()[0]  # type: ignore[union-attr]
+        == re.search(r"_ACF configured paths: \['(.*?)'.*]", caplog.text).groups()[0]  # type: ignore[union-attr]
     )
 
 
-def test_for_params():
+def test_for_params():  # type: ignore[no-untyped-def]  # noqa: ANN201
     """Test for params."""
-    proc = subprocess.run("pytest --help", shell=True, capture_output=True, check=False)
+    proc = subprocess.run(
+        "pytest --help",  # noqa: S607
+        shell=True,
+        capture_output=True,
+        check=False,
+    )
     assert "--ansible-unit-inject-only" in proc.stdout.decode()
